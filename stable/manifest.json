@@ -1,6 +1,1 @@
-﻿{
-    "sha256":  "781f39a5383141b6012999b0dbab1aabb2b656cd10d4ef03f5a21e5a9669cdde",
-    "firmwareUrl":  "https://barba-productions.github.io/barbadesktop-ota/stable/barbadesktop-1.1.0.bin",
-    "version":  "1.1.0",
-    "size":  1389472
-}
+{"version":"1.1.0","firmwareUrl":"https://barba-productions.github.io/barbadesktop-ota/stable/barbadesktop-1.1.0.bin","sha256":"781f39a5383141b6012999b0dbab1aabb2b656cd10d4ef03f5a21e5a9669cdde","size":1389472}
