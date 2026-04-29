@@ -1,0 +1,201 @@
+================================================================================
+ BARBADESKTOP OTA — HOW TO RELEASE A NEW FIRMWARE UPDATE
+ Last updated: 04/28/2026
+================================================================================
+
+OVERVIEW
+--------
+The OTA system works as follows:
+  1. The device fetches manifest.json from GitHub Pages every 6 hours (or on
+     demand via the Update button on the Info page).
+  2. It compares the manifest "version" field against the firmware version
+     compiled in setup.h (FW_VERSION).
+  3. If the manifest version is newer, it downloads the .bin binary, verifies
+     SHA-256 integrity, flashes to the inactive OTA slot, and reboots.
+
+MANIFEST URL (hardcoded in setup.h):
+  https://barba-productions.github.io/barbadesktop-ota/stable/manifest.json
+
+FIRMWARE VERSION DEFINE (in setup.h):
+  #define FW_VERSION "1.1.0"
+
+OTA REPO LOCAL PATH:
+  C:\Users\barba\OneDrive\Documents\___Barba Productions\BarbaDesktop\barbadesktop-ota\
+
+FIRMWARE PROJECT PATH:
+  C:\Users\barba\OneDrive\Documents\___Barba Productions\BarbaDesktop\BarbaDesktop1.0\
+
+================================================================================
+ STEP-BY-STEP RELEASE PROCESS
+================================================================================
+
+STEP 1 — Bump the firmware version
+-----------------------------------
+Open setup.h and change FW_VERSION to the new version.
+Example: change "1.1.0" to "1.1.1"
+
+  #define FW_VERSION "1.1.1"
+
+Use semantic versioning: MAJOR.MINOR.PATCH
+  - PATCH: bug fixes, small tweaks
+  - MINOR: new features (backward compatible)
+  - MAJOR: breaking changes or full redesigns
+
+
+STEP 2 — Build the firmware
+----------------------------
+Use the PlatformIO task in VS Code:
+  Terminal > Run Task > PlatformIO: Build and Upload
+  OR run in terminal:
+    python -m platformio run -e esp32dev
+
+Output binary will be at:
+  .pio\build\esp32dev\firmware.bin
+
+
+STEP 3 — Compute SHA-256 of the binary
+----------------------------------------
+Run in PowerShell from the BarbaDesktop1.0 project folder:
+
+  (Get-FileHash ".pio\build\esp32dev\firmware.bin" -Algorithm SHA256).Hash.ToLower()
+
+Copy the resulting 64-character hash. You will need it in Step 5.
+
+
+STEP 4 — Get the binary file size
+------------------------------------
+Run in PowerShell:
+
+  (Get-Item ".pio\build\esp32dev\firmware.bin").Length
+
+Copy the number (bytes).
+
+
+STEP 5 — Copy the binary to the OTA repo
+------------------------------------------
+Name the file after the new version:
+
+  Copy-Item ".pio\build\esp32dev\firmware.bin" `
+    "$env:USERPROFILE\OneDrive\Documents\___Barba Productions\BarbaDesktop\barbadesktop-ota\stable\barbadesktop-1.1.1.bin"
+
+Replace "1.1.1" with the actual new version.
+
+
+STEP 6 — Update manifest.json (NO BOM — very important)
+---------------------------------------------------------
+IMPORTANT: Do NOT use Set-Content or Out-File — they add a UTF-8 BOM which
+breaks ArduinoJson on the ESP32 (causes "InvalidInput" parse error).
+
+Use this exact PowerShell snippet (replace values as needed):
+
+  $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+  $json = '{"version":"1.1.1","firmwareUrl":"https://barba-productions.github.io/barbadesktop-ota/stable/barbadesktop-1.1.1.bin","sha256":"<PASTE_SHA256_HERE>","size":<PASTE_SIZE_HERE>}'
+  [System.IO.File]::WriteAllText(
+    "$env:USERPROFILE\OneDrive\Documents\___Barba Productions\BarbaDesktop\barbadesktop-ota\stable\manifest.json",
+    $json,
+    $utf8NoBom
+  )
+
+Verify no BOM:
+  $b = [System.IO.File]::ReadAllBytes("...\stable\manifest.json")
+  "First byte: $($b[0])  (must be 123 = `{`)"
+
+
+STEP 7 — Commit and push to GitHub
+------------------------------------
+  cd "$env:USERPROFILE\OneDrive\Documents\___Barba Productions\BarbaDesktop\barbadesktop-ota"
+  git add stable\barbadesktop-1.1.1.bin stable\manifest.json
+  git commit -m "release: firmware v1.1.1"
+  git push
+
+GitHub Pages will redeploy in about 1 minute.
+
+
+STEP 8 — Verify the live manifest
+-----------------------------------
+Open in browser:
+  https://barba-productions.github.io/barbadesktop-ota/stable/manifest.json
+
+Confirm the version, firmwareUrl, sha256, and size are correct.
+
+
+STEP 9 — Test on device
+-------------------------
+  - Boot the device on Wi-Fi.
+  - Open the Info page (long press the screen for 4 seconds).
+  - Tap the UPDATE button.
+  - The status line will show "Checking update..." with animated dots.
+  - If manifest version > device version: the device downloads, verifies SHA-256,
+    flashes, and reboots automatically.
+  - If already up to date: status shows "Device up to date".
+
+Or wait up to 6 hours for the automatic periodic check.
+
+
+================================================================================
+ VS CODE AI AGENT — COPY/PASTE PROMPT FOR NEXT RELEASE
+================================================================================
+
+Copy the text below and paste it into the VS Code Copilot Agent chat when you
+are ready to do a new OTA release:
+
+--------------------------------------------------------------------------------
+
+I need to release a new OTA firmware update for BarbaDesktop.
+
+Project paths:
+- Firmware project: C:\Users\barba\OneDrive\Documents\___Barba Productions\BarbaDesktop\BarbaDesktop1.0
+- OTA repo: C:\Users\barba\OneDrive\Documents\___Barba Productions\BarbaDesktop\barbadesktop-ota
+- Manifest URL: https://barba-productions.github.io/barbadesktop-ota/stable/manifest.json
+
+Steps to complete:
+1. In setup.h, bump FW_VERSION to the next version (e.g. "1.1.1").
+2. Build the firmware with PlatformIO (esp32dev env).
+3. Compute SHA-256 of .pio/build/esp32dev/firmware.bin.
+4. Get the file size in bytes.
+5. Copy the binary to the OTA repo stable/ folder, named barbadesktop-<version>.bin.
+6. Write manifest.json WITHOUT UTF-8 BOM using System.Text.UTF8Encoding $false
+   (NEVER use Set-Content or Out-File — they add BOM and break ArduinoJson on ESP32).
+7. Commit and push the OTA repo to GitHub.
+8. Verify the live manifest URL returns valid JSON with the new version.
+9. Commit the firmware project changes (version bump) to its own git repo.
+
+Important notes:
+- The manifest.json must be valid JSON with no BOM. First byte must be 123 ({).
+- Fields required: version, firmwareUrl, sha256, size.
+- SHA-256 is computed with: (Get-FileHash "firmware.bin" -Algorithm SHA256).Hash.ToLower()
+- The OTA repo is at: https://github.com/barba-productions/barbadesktop-ota
+- Firmware version follows semver (MAJOR.MINOR.PATCH).
+
+Please proceed step by step and confirm each step before moving to the next.
+
+--------------------------------------------------------------------------------
+
+================================================================================
+ NOTES & TROUBLESHOOTING
+================================================================================
+
+[ERROR] ArduinoJson InvalidInput
+  Cause: manifest.json has a UTF-8 BOM (caused by Set-Content -Encoding UTF8).
+  Fix: Use [System.IO.File]::WriteAllText with UTF8Encoding($false). See Step 6.
+
+[ERROR] Update.begin failed
+  Cause: Binary is larger than the OTA slot (1,703,936 bytes / ~1.7 MB).
+  Fix: Check flash usage after build. Must stay under 81% of slot size.
+       Current usage: ~81.3% (1,385,929 / 1,703,936 bytes). Watch this number.
+
+[ERROR] SHA256 mismatch
+  Cause: Binary was modified/corrupted after hash was computed, or wrong file hashed.
+  Fix: Recompute SHA-256 immediately after build, before copying the file.
+
+[INFO] First flash after partition change must be via USB
+  The partition table changed from huge_app to partitions_ota.csv.
+  Any device that was previously flashed with huge_app must be re-flashed once
+  via USB cable before OTA can work on that unit.
+
+[INFO] Periodic check timing
+  OTA_STARTUP_CHECK_DELAY_MS = 20,000 ms  (first check 20 sec after boot)
+  OTA_CHECK_INTERVAL_MS      = 6 hours    (then every 6 hours)
+  Manual trigger: Update button on Info page (long press screen 4 sec).
+
+================================================================================
